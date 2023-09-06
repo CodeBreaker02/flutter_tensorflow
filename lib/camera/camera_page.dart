@@ -90,11 +90,10 @@ class _CameraPageState extends State<CameraPage> {
   Widget build(BuildContext context) {
     final image = _image;
     final pose = _pose;
+    final screenSize = MediaQuery.of(context).size;
 
     final headPosition = _computeHeadPosition(pose, const Size(1.0, 1.0));
 
-    print('Head position: $headPosition');
-    // Check the head position and display a message based on it
     var message = '';
     if (headPosition > 600) {
       message = 'Head is on the left';
@@ -117,7 +116,10 @@ class _CameraPageState extends State<CameraPage> {
                   CustomPaint(
                     key: const Key('photoboothView_posePainter_customPainter'),
                     size: Size(image.width.toDouble(), image.height.toDouble()),
-                    painter: PosePainter(pose: pose, image: Assets.dash.image),
+                    painter: PosePainter(
+                        pose: pose,
+                        image: Assets.dash.image,
+                        screenSize: screenSize),
                   ),
               ],
             ),
@@ -186,14 +188,23 @@ extension on CameraException {
 }
 
 class PosePainter extends CustomPainter {
-  const PosePainter({required this.pose, required this.image});
+  const PosePainter({
+    required this.pose,
+    required this.image,
+    required this.screenSize, // Add screenSize as a required parameter
+  });
 
   final posenet.Pose pose;
   final ui.Image image;
+  final Size screenSize; // Declare screenSize as an instance variable
 
   @override
   void paint(Canvas canvas, Size size) {
-    final positions = _computePositions(pose: pose, image: image);
+    final positions = _computePositions(
+      pose: pose,
+      image: image,
+      screenSize: screenSize, // Pass screenSize to _computePositions
+    );
     for (final position in positions) {
       canvas.drawImage(image, position, Paint());
     }
@@ -208,22 +219,29 @@ class PosePainter extends CustomPainter {
 List<Offset> _computePositions({
   required ui.Image image,
   posenet.Pose? pose,
-  Size scale = const Size(1.0, 1.0),
+  required Size screenSize, // Add screenSize as a parameter
 }) {
   final positions = <Offset>[];
   final _pose = pose;
   if (_pose == null) return positions;
   if (_pose.score < _minPoseConfidence) return positions;
+
+  // Calculate the scaling factor based on the screen size
+  final scaleX = screenSize.width / image.width;
+  final scaleY = screenSize.height / image.height;
+
   for (final keypoint in _pose.keypoints) {
     if (!_supportedParts.contains(keypoint.part)) continue;
     if (keypoint.score < _minPartConfidence) continue;
     final x = keypoint.position.x.ceilToDouble();
     final y = keypoint.position.y.ceilToDouble();
-    final offset = Offset(x * scale.width, y * scale.height);
+
+    // Normalize the Offset values based on the scaling factors
     final normalizedOffset = Offset(
-      ((offset.dx - image.width) + 100),
-      ((offset.dy - image.height) - 120),
+      x * scaleX,
+      y * scaleY,
     );
+
     positions.add(normalizedOffset);
   }
   return positions;
